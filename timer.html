@@ -1,0 +1,165 @@
+<html>
+
+<head>
+  <style>
+    html {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 25px;
+      background-color: #c9c8c8;
+    }
+
+    main {
+      margin-top: calc(40vh - 180px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    section {
+      margin: auto;
+    }
+
+    section:first-of-type>p {
+
+      font-size: 50px;
+    }
+
+    #buttons>p {
+      padding: 5px 10px;
+      border-radius: 5px;
+      border: 2px solid #000;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #buttons>p:hover,
+    #buttons>.running {
+      background-color: #094fe7bb;
+    }
+
+    #buttons>#auto:hover,
+    #buttons>#auto.enabled {
+      background-color: #e9b50bbb;
+    }
+
+    #buttons>#reset:hover,
+    #buttons>#reset.running {
+      background-color: #db2828bb;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <section>
+      <p id="timer">0:00</p>
+    </section>
+    <section id="buttons">
+      <p id="twenty-five" data-seconds="1500">25 Minutes</p>
+      <p id="random" data-seconds="random">Random Break</p>
+      <p id="auto" data-seconds="auto">Auto Loop</p>
+      <p id="reset" data-seconds="0">Reset</p>
+    </section>
+  </main>
+  <script>
+    // the time when the button was pressed
+    let startTime = Date.now();
+    // the current chosen amount of seconds
+    let maxSeconds = 0;
+    // 
+    let auto = false;
+
+    // 'timer finished' audio
+    const finishedAudio = new Audio("DrawFX.wav");
+
+    // grabbing the elements
+    const timer = document.getElementById("timer");
+    const buttons = document.querySelectorAll("#buttons > *")
+    const twentyFiveBtn = document.getElementById("twenty-five");
+    const randomBtn = document.getElementById("random");
+    const autoBtn = document.getElementById("auto");
+    // referencing "worker.js" as a new Web Worker
+    const worker = new Worker("worker.js");
+
+    function removeRunningClass() {
+      buttons.forEach((button) => {
+        button.classList.remove("running");
+      });
+    }
+
+    function genRandomRange(range, min) {
+      return Math.floor(Math.random() * range + min) * 60;
+    }
+
+    // updates the HTML, prompts worker for new seconds
+    function update(seconds) {
+      // change seconds to proper time format, update HTML
+      timer.innerHTML = `${Math.floor(seconds / 60)}:${seconds % 60 >= 10 ? seconds % 60 : "0" + seconds % 60}`;
+      document.title = timer.innerHTML;
+
+      // prompt an update from worker
+      if (seconds > 0)
+        worker.postMessage([startTime, maxSeconds]);
+    }
+
+    // after getting updated seconds from worker, run update() wih new seconds
+    worker.addEventListener("message", (msg) => {
+      // msg.data = seconds, update only if it's a positive number
+      if (msg.data < 1) {
+        removeRunningClass();
+        if (auto) {
+          startTime = Date.now();
+          // maxSeconds = Full # of mins ? switch to random
+          if (maxSeconds == twentyFiveBtn.dataset.seconds) {
+            console.log(maxSeconds);
+            maxSeconds = genRandomRange(10, 5);
+            console.log(maxSeconds);
+            randomBtn.classList.add("running");
+          }
+          // maxSeconds = random ? switch to full # of mins
+          else {
+            console.log(maxSeconds);
+            maxSeconds = twentyFiveBtn.dataset.seconds;
+            console.log(maxSeconds);
+            twentyFiveBtn.classList.add("running");
+          }
+          update(maxSeconds);
+        }
+        finishedAudio.play();
+      }
+      update(msg.data);
+    })
+
+
+    // add event listeners to all buttons
+    buttons.forEach((button) => {
+      button.addEventListener("click", (e) => {
+        // if clicking auto button, toggle auto, toggle "enabled" class         
+        if (button.id === "auto") {
+          auto = !auto;
+          autoBtn.classList.toggle("enabled");
+        }
+        else {
+          // else if clicking reset button, turn off auto, turn off "enabled" class 
+          if (button.id === "reset") {
+            auto = false;
+            autoBtn.classList.remove("enabled");
+          }
+          // update start time, catch and handle "random", and assign the seconds dataset to maxSeconds 
+          startTime = Date.now();
+          maxSeconds = button.id === "random" ?
+            genRandomRange(10, 5)
+            : button.dataset.seconds;
+          // remove all "running" classes, add "running" to current button
+          removeRunningClass();
+          button.classList.add("running");
+          // start making requests from worker
+          worker.postMessage([startTime, maxSeconds]);
+
+        }
+      });
+    });
+
+  </script>
+</body>
+
+</html>
